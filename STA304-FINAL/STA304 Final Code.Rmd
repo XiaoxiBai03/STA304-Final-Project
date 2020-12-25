@@ -1,0 +1,98 @@
+---
+title: "STA304-Finalcode"
+author: "XIAOXI BAI"
+date: "12/15/2020"
+output: html_document
+---
+
+```{r}
+current_path = rstudioapi::getActiveDocumentContext()$path 
+setwd(dirname(current_path ))
+censue_data = read.csv("~/Desktop/STA304-FINAL/census_2016.csv")
+
+devtools::install_github("hodgettsp/cesR")
+
+library(tidyverse)
+library(cesR)
+library(labelled)
+library(lme4)
+
+get_ces("ces2019_web")
+head(ces2019_web,10)
+colnames(ces2019_web)
+dim(ces2019_web)
+ces2019 = ces2019_web[ ,c(8,9,10,22)]
+head(ces2019,10)
+ces2019[which(ces2019_web[,10]==1),3] = 1
+ces2019[which(ces2019_web[,10]==2 | ces2019_web[,10]==3),3] = 2
+ces2019[which(ces2019_web[,10]==4 | ces2019_web[,10]==5),3] = 3
+ces2019[which(ces2019_web[,10]==6 | ces2019_web[,10]==7),3] = 4
+ces2019[which(ces2019_web[,10]==8 | ces2019_web[,10]==9),3] = 5
+ces2019[which(ces2019_web[,10]==10 | ces2019_web[,10]==11),3] = 6
+ces2019 = ces2019[which(ces2019[,3]!=12),]
+head(ces2019)
+```
+```{r}
+ces2019 = data.frame(ces2019[which(ces2019[,4]==1 |ces2019[,4]==2),])
+#only choose liberal party and conservative party
+ces2019$cps19_votechoice = ces2019$cps19_votechoice-1
+ces2019$cps19_province <- factor(ces2019$cps19_province)
+```
+
+```{r}
+fit_glm<- glmer(
+    cps19_votechoice ~ factor(cps19_gender) + factor(cps19_education)
+    +(1 | cps19_province),
+    family = binomial(link = "logit"),
+    data = ces2019
+)
+summary(fit_glm)
+
+fit_glm
+
+```
+
+
+```{r}
+fit_lm<- lmer(
+    cps19_votechoice ~ factor(cps19_gender) + factor(cps19_education)
+    +(1 | cps19_province),
+    data = ces2019
+)
+summary(fit_lm)
+
+fit_lm
+```
+
+```{r}
+x <- censue_data[,1]
+y <- factor(colnames(censue_data)[3:8])
+z = colnames(censue_data)[9:10]
+d1 <- expand.grid(x = x, y = y,z = z)
+N = c()
+data_female = censue_data
+data_male = censue_data
+for(i in 3:8){
+    data_female[,i] = censue_data[,i]*censue_data[,9]/100
+    data_male[,i] = censue_data[,i]*censue_data[,10]/100
+}
+
+N = c(unlist(data_female[3:8]),unlist(data_male[3:8]))
+d1 = cbind(d1,N)
+levels(d1$y) = c(3,6,4,1,2,5)
+levels(d1$z) = c(1,2)
+
+colnames(d1) = c('cps19_province', 'cps19_education','cps19_gender','N')
+
+glm_posterior_prob = predict(fit_glm,newdata= d1,type="response")
+lm_posterior_prob = predict(fit_lm,newdata= d1)
+
+glm_poststrat_prob <- glm_posterior_prob %*% d1$N / sum(d1$N)
+lm_poststrat_prob <- lm_posterior_prob %*% d1$N / sum(d1$N)
+
+round(glm_poststrat_prob , 3)
+# choose Liberal party
+round(lm_poststrat_prob , 3)
+# choose Liberal party
+```
+
